@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LACES 4D Ageing Simulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #ffffff;
+            overflow: hidden;
+        }
+        
+        #container {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            grid-template-rows: 60px 1fr 80px;
+            height: 100vh;
+            gap: 0;
+        }
+        
+        #header {
+            grid-column: 1 / -1;
+            background: rgba(0, 0, 0, 0.4);
+            border-bottom: 2px solid #00ffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+        }
+        
+        #header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(90deg, #00ffff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        #controls {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(0, 255, 255, 0.2);
+            overflow-y: auto;
+        }
+        
+        #viewport {
+            position: relative;
+            background: #000;
+        }
+        
+        #analytics {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border-left: 1px solid rgba(0, 255, 255, 0.2);
+            overflow-y: auto;
+        }
+        
+        #timeline {
+            grid-column: 1 / -1;
+            background: rgba(0, 0, 0, 0.4);
+            border-top: 1px solid rgba(0, 255, 255, 0.2);
+            padding: 15px 30px;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group h3 {
+            font-size: 14px;
+            color: #00ffff;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        .slider-value {
+            color: #00ff88;
+            font-weight: 600;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00ffff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        
+        .button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #00ffff, #00ff88);
+            border: none;
+            border-radius: 6px;
+            color: #000;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 10px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 255, 0.4);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .stat-card {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #00ffff;
+        }
+        
+        .stat-unit {
+            font-size: 12px;
+            color: #aaa;
+            margin-left: 5px;
+        }
+        
+        .chart-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            height: 200px;
+        }
+        
+        #playback-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .timeline-slider {
+            flex: 1;
+            height: 8px;
+            background: linear-gradient(90deg, #00ffff 0%, #ff00ff 100%);
+            border-radius: 4px;
+        }
+        
+        .timeline-marker {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        #fps-counter {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #00ff88;
+            font-family: monospace;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 255, 255, 0.2);
+            border-top-color: #00ffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .legend-gradient {
+            flex: 1;
+            height: 20px;
+            background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
+            border-radius: 4px;
+        }
+        
+        .legend-label {
+            font-size: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <header id="header">
+            <h1>⚙️ LACES 4D AGEING SIMULATOR</h1>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div style="font-size: 12px; color: #888;">
+                    <span id="connection-status">🟢 CONNECTED</span>
+                </div>
+                <div style="font-size: 12px; color: #888;">
+                    <span id="user-count">3 users online</span>
+                </div>
+            </div>
+        </header>
+        
+        <aside id="controls">
+            <div class="control-group">
+                <h3>Component Selection</h3>
+                <select id="component-select" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,255,255,0.3); color: #fff; border-radius: 4px;">
+                    <option value="spindle">Spindle Assembly</option>
+                    <option value="bearing">Front Bearing</option>
+                    <option value="seal">Seal Unit</option>
+                    <option value="tool">Cutting Tool</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <h3>Operating Conditions</h3>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>RPM</span>
+                        <span class="slider-value" id="rpm-value">30,000</span>
+                    </div>
+                    <input type="range" id="rpm-slider" min="0" max="60000" value="30000" step="1000">
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Load (N)</span>
+                        <span class="slider-value" id="load-value">500</span>
+                    </div>
+                    <input type="range" id="load-slider" min="0" max="2000" value="500" step="50">
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Temperature (°C)</span>
+                        <span class="slider-value" id="temp-value">75</span>
+                    </div>
+                    <input type="range" id="temp-slider" min="20" max="150" value="75" step="5">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Simulation Settings</h3>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Prediction Horizon</span>
+                        <span class="slider-value" id="horizon-value">5 years</span>
+                    </div>
+                    <input type="range" id="horizon-slider" min="1" max="10" value="5" step="1">
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Time Resolution</span>
+                        <span class="slider-value" id="resolution-value">365 steps</span>
+                    </div>
+                    <input type="range" id="resolution-slider" min="52" max="1825" value="365" step="1">
+                </div>
+            </div>
+            
+            <button class="button" id="run-simulation">🚀 RUN SIMULATION</button>
+            <button class="button" style="background: linear-gradient(135deg, #ff6b6b, #ee5a6f);" id="export-results">📊 EXPORT RESULTS</button>
+        </aside>
+        
+        <main id="viewport">
+            <div id="loading">
+                <div class="spinner"></div>
+                <div>Initializing 3D Engine...</div>
+            </div>
+            <div id="fps-counter">FPS: 60</div>
+            <canvas id="canvas"></canvas>
+        </main>
+        
+        <aside id="analytics">
+            <div class="control-group">
+                <h3>Real-time Metrics</h3>
+                
+                <div class="stat-card">
+                    <div class="stat-label">Current Wear</div>
+                    <div class="stat-value">12.3<span class="stat-unit">%</span></div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-label">Remaining Life</div>
+                    <div class="stat-value">4.2<span class="stat-unit">years</span></div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-label">Failure Probability</div>
+                    <div class="stat-value">8.7<span class="stat-unit">%</span></div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Degradation Trajectory</h3>
+                <div class="chart-container">
+                    <canvas id="trajectory-chart"></canvas>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Stress Heatmap</h3>
+                <div class="heatmap-legend">
+                    <span class="legend-label">Low</span>
+                    <div class="legend-gradient"></div>
+                    <span class="legend-label">High</span>
+                </div>
+            </div>
+        </aside>
+        
+        <footer id="timeline">
+            <div id="playback-controls">
+                <button style="background: none; border: none; color: #00ffff; font-size: 20px; cursor: pointer;" id="play-pause">▶️</button>
+                <input type="range" class="timeline-slider" id="time-slider" min="0" max="100" value="0">
+                <span style="color: #00ffff; font-size: 14px; font-weight: 600;" id="time-display">Year 0.0 / 5.0</span>
+            </div>
+            <div class="timeline-marker">
+                <span>New</span>
+                <span>1 Year</span>
+                <span>2 Years</span>
+                <span>3 Years</span>
+                <span>4 Years</span>
+                <span>End of Life</span>
+            </div>
+        </footer>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <script>
+        // ============================================================================
+        // LACES 4D AGEING SIMULATOR - Three.js Implementation
+        // ============================================================================
+        
+        class AgeingSimulator {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ 
+                    canvas: this.canvas, 
+                    antialias: true,
+                    alpha: true
+                });
+                
+                this.currentTime = 0;
+                this.maxTime = 5; // 5 years
+                this.isPlaying = false;
+                this.fps = 0;
+                this.frameCount = 0;
+                this.lastFpsUpdate = Date.now();
+                
+                this.degradationData = [];
+                this.stressMap = null;
+                
+                this.init();
+            }
+            
+            init() {
+                // Setup renderer
+                this.renderer.setSize(window.innerWidth - 600, window.innerHeight - 140);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                // Setup camera
+                this.camera.position.set(5, 3, 7);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Setup scene
+                this.scene.background = new THREE.Color(0x000000);
+                this.scene.fog = new THREE.Fog(0x000000, 10, 50);
+                
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+                this.scene.add(ambientLight);
+                
+                const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                mainLight.position.set(10, 10, 5);
+                mainLight.castShadow = true;
+                mainLight.shadow.mapSize.width = 2048;
+                mainLight.shadow.mapSize.height = 2048;
+                this.scene.add(mainLight);
+                
+                const fillLight = new THREE.DirectionalLight(0x00ffff, 0.3);
+                fillLight.position.set(-5, 5, -5);
+                this.scene.add(fillLight);
+                
+                // Create spindle model
+                this.createSpindleModel();
+                
+                // Controls
+                this.setupControls();
+                
+                // Generate initial degradation data
+                this.generateDegradationData();
+                
+                // Setup chart
+                this.setupChart();
+                
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                
+                // Start render loop
+                this.animate();
+                
+                // Handle window resize
+                window.addEventListener('resize', () => this.onWindowResize());
+            }
+            
+            createSpindleModel() {
+                this.spindleGroup = new THREE.Group();
+                
+                // Spindle shaft
+                const shaftGeometry = new THREE.CylinderGeometry(0.3, 0.3, 5, 32);
+                const shaftMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x888888,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
+                shaft.castShadow = true;
+                shaft.receiveShadow = true;
+                this.spindleGroup.add(shaft);
+                
+                // Front bearing
+                const bearingGeometry = new THREE.TorusGeometry(0.5, 0.15, 16, 32);
+                const bearingMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xcccccc,
+                    metalness: 0.9,
+                    roughness: 0.1
+                });
+                this.frontBearing = new THREE.Mesh(bearingGeometry, bearingMaterial);
+                this.frontBearing.position.y = 1.5;
+                this.frontBearing.rotation.x = Math.PI / 2;
+                this.frontBearing.castShadow = true;
+                this.spindleGroup.add(this.frontBearing);
+                
+                // Rear bearing
+                const rearBearing = this.frontBearing.clone();
+                rearBearing.position.y = -1.5;
+                this.spindleGroup.add(rearBearing);
+                
+                // Tool holder
+                const holderGeometry = new THREE.ConeGeometry(0.4, 1.2, 32);
+                const holderMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x666666,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                const holder = new THREE.Mesh(holderGeometry, holderMaterial);
+                holder.position.y = -3;
+                holder.castShadow = true;
+                this.spindleGroup.add(holder);
+                
+                // Cutting tool
+                const toolGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1.5, 16);
+                const toolMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffaa00,
+                    metalness: 0.9,
+                    roughness: 0.1,
+                    emissive: 0xff6600,
+                    emissiveIntensity: 0.2
+                });
+                this.cuttingTool = new THREE.Mesh(toolGeometry, toolMaterial);
+                this.cuttingTool.position.y = -4;
+                this.cuttingTool.castShadow = true;
+                this.spindleGroup.add(this.cuttingTool);
+                
+                // Stress visualization particles
+                this.createStressParticles();
+                
+                this.scene.add(this.spindleGroup);
+                
+                // Add grid
+                const gridHelper = new THREE.GridHelper(10, 10, 0x00ffff, 0x004444);
+                gridHelper.position.y = -3;
+                this.scene.add(gridHelper);
+            }
+            
+            createStressParticles() {
+                const particleCount = 1000;
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(particleCount * 3);
+                const colors = new Float32Array(particleCount * 3);
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 0.3 + Math.random() * 0.2;
+                    const height = (Math.random() - 0.5) * 5;
+                    
+                    positions[i3] = Math.cos(angle) * radius;
+                    positions[i3 + 1] = height;
+                    positions[i3 + 2] = Math.sin(angle) * radius;
+                    
+                    colors[i3] = 0;
+                    colors[i3 + 1] = 1;
+                    colors[i3 + 2] = 1;
+                }
+                
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const material = new THREE.PointsMaterial({
+                    size: 0.05,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.6,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                this.stressParticles = new THREE.Points(geometry, material);
+                this.spindleGroup.add(this.stressParticles);
+            }
+            
+            generateDegradationData() {
+                const rpm = parseInt(document.getElementById('rpm-slider').value);
+                const load = parseInt(document.getElementById('load-slider').value);
+                const temp = parseInt(document.getElementById('temp-slider').value);
+                const horizon = parseInt(document.getElementById('horizon-slider').value);
+                const resolution = parseInt(document.getElementById('resolution-slider').value);
+                
+                this.degradationData = [];
+                
+                // Paris Law parameters (fatigue crack growth)
+                const C = 1e-11; // Material constant
+                const m = 3.2;   // Paris exponent
+                const stressRange = load * (rpm / 30000); // Normalized stress
+                
+                // Arrhenius for temperature acceleration
+                const activationEnergy = 0.65; // eV
+                const k = 8.617e-5; // Boltzmann constant
+                const T = temp + 273.15; // Kelvin
+                const tempFactor = Math.exp(-activationEnergy / (k * T));
+                
+                let cumulativeWear = 0;
+                
+                for (let i = 0; i <= resolution; i++) {
+                    const timeYears = (i / resolution) * horizon;
+                    const timeHours = timeYears * 8760; // Hours per year
+                    
+                    // Physics-based degradation
+                    const cyclicDamage = C * Math.pow(stressRange, m) * timeHours;
+                    const thermalDamage = tempFactor * timeHours * 0.001;
+                    cumulativeWear = Math.min(100, cyclicDamage + thermalDamage);
+                    
+                    // Weibull distribution for failure probability
+                    const beta = 2.5; // Shape parameter
+                    const eta = 4.5 * horizon; // Scale parameter (years)
+                    const failureProb = 1 - Math.exp(-Math.pow(timeYears / eta, beta));
+                    
+                    this.degradationData.push({
+                        time: timeYears,
+                        wear: cumulativeWear,
+                        failureProb: failureProb * 100,
+                        stress: stressRange,
+                        temperature: temp
+                    });
+                }
+                
+                this.updateChart();
+            }
+            
+            setupChart() {
+                const ctx = document.getElementById('trajectory-chart').getContext('2d');
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Wear (%)',
+                            data: [],
+                            borderColor: '#00ffff',
+                            backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true
+                        }, {
+                            label: 'Failure Prob. (%)',
+                            data: [],
+                            borderColor: '#ff00ff',
+                            backgroundColor: 'rgba(255, 0, 255, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#fff', font: { size: 10 } }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#888', font: { size: 9 } },
+                                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            },
+                            y: {
+                                ticks: { color: '#888', font: { size: 9 } },
+                                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            updateChart() {
+                const labels = this.degradationData.map(d => d.time.toFixed(1));
+                const wearData = this.degradationData.map(d => d.wear);
+                const failureData = this.degradationData.map(d => d.failureProb);
+                
+                this.chart.data.labels = labels;
+                this.chart.data.datasets[0].data = wearData;
+                this.chart.data.datasets[1].data = failureData;
+                this.chart.update();
+            }
+            
+            setupControls() {
+                // Slider listeners
+                document.getElementById('rpm-slider').addEventListener('input', (e) => {
+                    document.getElementById('rpm-value').textContent = parseInt(e.target.value).toLocaleString();
+                });
+                
+                document.getElementById('load-slider').addEventListener('input', (e) => {
+                    document.getElementById('load-value').textContent = e.target.value;
+                });
+                
+                document.getElementById('temp-slider').addEventListener('input', (e) => {
+                    document.getElementById('temp-value').textContent = e.target.value;
+                });
+                
+                document.getElementById('horizon-slider').addEventListener('input', (e) => {
+                    document.getElementById('horizon-value').textContent = `${e.target.value} years`;
+                    this.maxTime = parseInt(e.target.value);
+                });
+                
+                document.getElementById('resolution-slider').addEventListener('input', (e) => {
+                    document.getElementById('resolution-value').textContent = `${e.target.value} steps`;
+                });
+                
+                // Run simulation button
+                document.getElementById('run-simulation').addEventListener('click', () => {
+                    this.generateDegradationData();
+                    this.currentTime = 0;
+                    document.getElementById('time-slider').value = 0;
+                    this.updateVisualization();
+                });
+                
+                // Play/pause button
+                document.getElementById('play-pause').addEventListener('click', () => {
+                    this.isPlaying = !this.isPlaying;
+                    document.getElementById('play-pause').textContent = this.isPlaying ? '⏸️' : '▶️';
+                });
+                
+                // Time slider
+                document.getElementById('time-slider').addEventListener('input', (e) => {
+                    this.currentTime = (parseFloat(e.target.value) / 100) * this.maxTime;
+                    this.updateVisualization();
+                });
+            }
+            
+            updateVisualization() {
+                if (this.degradationData.length === 0) return;
+                
+                // Find closest data point
+                const dataPoint = this.degradationData.reduce((prev, curr) => 
+                    Math.abs(curr.time - this.currentTime) < Math.abs(prev.time - this.currentTime) ? curr : prev
+                );
+                
+                // Update stats
+                document.querySelector('.stat-card:nth-child(1) .stat-value').innerHTML = 
+                    `${dataPoint.wear.toFixed(1)}<span class="stat-unit">%</span>`;
+                
+                const remainingLife = this.maxTime - this.currentTime;
+                document.querySelector('.stat-card:nth-child(2) .stat-value').innerHTML = 
+                    `${remainingLife.toFixed(1)}<span class="stat-unit">years</span>`;
+                
+                document.querySelector('.stat-card:nth-child(3) .stat-value').innerHTML = 
+                    `${dataPoint.failureProb.toFixed(1)}<span class="stat-unit">%</span>`;
+                
+                // Update time display
+                document.getElementById('time-display').textContent = 
+                    `Year ${this.currentTime.toFixed(1)} / ${this.maxTime.toFixed(1)}`;
+                
+                // Visual degradation effects
+                const wearFactor = dataPoint.wear / 100;
+                
+                // Change material color based on wear
+                const r = Math.floor(136 + wearFactor * 119);
+                const g = Math.floor(136 - wearFactor * 136);
+                const b = Math.floor(136 - wearFactor * 136);
+                this.frontBearing.material.color.setRGB(r/255, g/255, b/255);
+                
+                // Add surface roughness
+                this.frontBearing.material.roughness = 0.1 + wearFactor * 0.6;
+                
+                // Update stress particles
+                this.updateStressVisualization(wearFactor);
+            }
+            
+            updateStressVisualization(wearFactor) {
+                const colors = this.stressParticles.geometry.attributes.color.array;
+                
+                for (let i = 0; i < colors.length; i += 3) {
+                    // Green to yellow to red gradient
+                    colors[i] = wearFactor; // R
+                    colors[i + 1] = 1 - wearFactor * 0.5; // G
+                    colors[i + 2] = Math.max(0, 1 - wearFactor * 2); // B
+                }
+                
+                this.stressParticles.geometry.attributes.color.needsUpdate = true;
+                this.stressParticles.material.opacity = 0.3 + wearFactor * 0.5;
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                // Auto-advance time when playing
+                if (this.isPlaying && this.currentTime < this.maxTime) {
+                    this.currentTime += 0.01; // 0.01 years per frame at 60fps = ~5 days per second
+                    const progress = (this.currentTime / this.maxTime) * 100;
+                    document.getElementById('time-slider').value = progress;
+                    this.updateVisualization();
+                    
+                    if (this.currentTime >= this.maxTime) {
+                        this.isPlaying = false;
+                        document.getElementById('play-pause').textContent = '▶️';
+                    }
+                }
+                
+                // Rotate spindle
+                const rpm = parseInt(document.getElementById('rpm-slider').value);
+                const rotationSpeed = (rpm / 60000) * (2 * Math.PI); // Radians per frame
+                this.spindleGroup.rotation.y += rotationSpeed;
+                
+                // Rotate stress particles in opposite direction
+                if (this.stressParticles) {
+                    this.stressParticles.rotation.y -= rotationSpeed * 0.5;
+                }
+                
+                // Camera orbit
+                const time = Date.now() * 0.0001;
+                this.camera.position.x = Math.sin(time) * 7;
+                this.camera.position.z = Math.cos(time) * 7;
+                this.camera.lookAt(0, 0, 0);
+                
+                // Update FPS counter
+                this.frameCount++;
+                const now = Date.now();
+                if (now - this.lastFpsUpdate >= 1000) {
+                    this.fps = this.frameCount;
+                    this.frameCount = 0;
+                    this.lastFpsUpdate = now;
+                    document.getElementById('fps-counter').textContent = `FPS: ${this.fps}`;
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            onWindowResize() {
+                const width = window.innerWidth - 600;
+                const height = window.innerHeight - 140;
+                
+                this.camera.aspect = width / height;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(width, height);
+            }
+        }
+        
+        // Initialize simulator
+        const simulator = new AgeingSimulator();
+        
+        // Export functionality
+        document.getElementById('export-results').addEventListener('click', () => {
+            const data = {
+                timestamp: new Date().toISOString(),
+                parameters: {
+                    rpm: document.getElementById('rpm-slider').value,
+                    load: document.getElementById('load-slider').value,
+                    temperature: document.getElementById('temp-slider').value,
+                    horizon: document.getElementById('horizon-slider').value
+                },
+                degradation_trajectory: simulator.degradationData
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `laces_ageing_simulation_${Date.now()}.json`;
+            a.click();
+        });
+    </script>
+</body>
+</html>

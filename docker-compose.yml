@@ -1,0 +1,219 @@
+# LACES-GENESIS OMNI - Docker Compose Deployment
+# Deploys complete system: Backend, Database, Cache, Agents
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # DATABASE - PostgreSQL + TimescaleDB
+  # ============================================================================
+  database:
+    image: timescale/timescaledb:latest-pg15
+    container_name: laces-database
+    environment:
+      POSTGRES_DB: laces_genesis
+      POSTGRES_USER: laces_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      TIMESCALEDB_TELEMETRY: off
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U laces_admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # REDIS - Cache & Pub/Sub
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: laces-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # BACKEND API - FastAPI
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: laces-backend
+    environment:
+      DATABASE_URL: postgresql://laces_admin:${DB_PASSWORD:-changeme}@database:5432/laces_genesis
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      WORKERS: 4
+    ports:
+      - "8000:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - file_storage:/app/storage
+    networks:
+      - laces-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # ============================================================================
+  # MAINTENANCE AGENT
+  # ============================================================================
+  maintenance-agent:
+    build:
+      context: ./maintenance-agent
+      dockerfile: Dockerfile
+    container_name: laces-maintenance-agent
+    environment:
+      DATABASE_URL: postgresql://laces_admin:${DB_PASSWORD:-changeme}@database:5432/laces_genesis
+      SMTP_SERVER: ${SMTP_SERVER:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      ALERT_EMAIL: ${ALERT_EMAIL:-alerts@laces.ai}
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - ./maintenance-agent:/app
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # FRONTEND - Nginx serving static files
+  # ============================================================================
+  frontend:
+    image: nginx:alpine
+    container_name: laces-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./deployment/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ssl_certs:/etc/nginx/ssl
+    depends_on:
+      - backend
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - Prometheus
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: laces-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployment/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # MONITORING - Grafana
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: laces-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deployment/grafana-dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # MESSAGE QUEUE - RabbitMQ (for async tasks)
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: laces-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: laces
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-changeme}
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - laces-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # WORKER - Celery for background jobs
+  # ============================================================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: laces-worker
+    command: celery -A tasks worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql://laces_admin:${DB_PASSWORD:-changeme}@database:5432/laces_genesis
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://laces:${RABBITMQ_PASSWORD:-changeme}@rabbitmq:5672
+    depends_on:
+      - database
+      - redis
+      - rabbitmq
+    volumes:
+      - ./backend:/app
+      - file_storage:/app/storage
+    networks:
+      - laces-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+networks:
+  laces-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  rabbitmq_data:
+  file_storage:
+  ssl_certs:
