@@ -80,10 +80,10 @@ Protocol suite for synchronizing physical haptic hardware:
 ┌─────────────────────────────────────────────────────────────────┐
 │              POSTGRESQL + TIMESCALEDB (Primary DB)              │
 │                                                                 │
-│  ┌─────────────┬──────────────┬─────────────┬────────────────┐│
-│  │ Users &     │ Digital Twins│ Telemetry   │ Maintenance    ││
-│  │ Sessions    │ (Versioned)  │ (Hypertable)│ Tickets        ││
-│  └─────────────┴──────────────┴─────────────┴────────────────┘│
+│  ┌─────────────┬──────────────┬─────────────┬────────────────┐  │
+│  │ Users &     │ Digital Twins│ Telemetry   │ Maintenance    │  │
+│  │ Sessions    │ (Versioned)  │ (Hypertable)│ Tickets        │  │
+│  └─────────────┴──────────────┴─────────────┴────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
            │
            ├────────────────┬────────────────┬───────────────────┐
